@@ -4,6 +4,7 @@ from django.db.models import CheckConstraint, Q, F
 from django.core.validators import MaxValueValidator, MinValueValidator, MaxLengthValidator, MinLengthValidator
 
 nameformat='^[-0-9a-z.]+$'
+rrnameformat='^([-0-9a-zA-Z._*]+|@)$'
 
 RECORDTYPES = [
     ("SOA" ,"SOA" ),
@@ -100,7 +101,27 @@ class Rr(models.Model):
     class Meta:
         default_permissions = ()
         permissions = ( ('access_rr', 'Access Rr'),)
-        constraints = [ CheckConstraint( check=Q(name__regex=nameformat),
-                                         name='record_name_must_contain_only_letters_numbers_or_dots'
+        constraints = [ CheckConstraint( check=Q(name__regex=rrnameformat),
+                                         name='record_name_must_contain_only_letters_numbers_star_or_dots'
                         ),
                       ]
+
+# Rule to add a record to a zone
+# namepat is the regexp checked for allowed Rr names 
+#   example : '^[-a-zA-Z0-9_.]+$' rules out names such as '*' or '@'
+# typepat is the regexp checked for allowed Rr types
+#   example : '^(A|AAAA|CNAME|MX|SRV|TXT)$' rules out types such as 'NS' or 'SOA'
+
+class Zonerule(models.Model):
+    zone = models.ForeignKey(Zone, on_delete=models.PROTECT, default=None, blank=False)
+    namepat = models.TextField(validators=[MaxLengthValidator(1024)], blank=True, null=True)
+    typepat = models.TextField(validators=[MaxLengthValidator(1024)], blank=True, null=True)
+    def __str__(self):
+        return f"namepat='{self.namepat}',typepat='{self.typepat}'"
+
+    def is_allowed(group, name, type):
+        # allow by default for admin group
+        if group == "admin":   
+            return True
+        else:
+            return (re.match(self.namepat, name) and re.match(self.typepat, type))
