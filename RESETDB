@@ -1,0 +1,8 @@
+#!/bin/bash
+set -eu
+set -x
+cd ~/dnsapp/
+source ~/env/bin/activate
+dropdb django 
+createdb --owner=django django
+rm -fr core/migrations/ ; ./manage.py makemigrations core ; ./manage.py migrate
