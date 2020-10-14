@@ -113,15 +113,16 @@ class Rr(models.Model):
 #   example : '^(A|AAAA|CNAME|MX|SRV|TXT)$' rules out types such as 'NS' or 'SOA'
 
 class Zonerule(models.Model):
-    zone = models.ForeignKey(Zone, on_delete=models.PROTECT, default=None, blank=False)
+    zone = models.OneToOneField(Zone, on_delete=models.CASCADE, primary_key=True)
     namepat = models.TextField(validators=[MaxLengthValidator(1024)], blank=True, null=True)
     typepat = models.TextField(validators=[MaxLengthValidator(1024)], blank=True, null=True)
+
     def __str__(self):
         return f"namepat='{self.namepat}',typepat='{self.typepat}'"
 
-    def is_allowed(group, name, type):
-        # allow by default for admin group
-        if group == "admin":   
-            return True
-        else:
-            return (re.match(self.namepat, name) and re.match(self.typepat, type))
+    def is_checked(self, name, type):
+        # check name
+        m1 = (re.match(self.namepat, name) != None)
+        # check type
+        m2 = (re.match(self.typepat, type) != None)
+        return (m1 and m2)
