@@ -1,7 +1,8 @@
 import re
 from django.db import models
 from django.db.models import CheckConstraint, Q, F
-from django.core.validators import MaxValueValidator, MinValueValidator, MaxLengthValidator, MinLengthValidator
+from django.core.validators import MaxLengthValidator, MinLengthValidator
+from core import validators
 
 nameformat='^[-0-9a-z.]+$'
 rrnameformat='^([-0-9a-zA-Z._*]+|@)$'
@@ -21,8 +22,8 @@ RECORDTYPES = [
 
 class Namespace(models.Model):
     # Le nom est obligatoire : ne peut pas être vide, doit être unique
-    name = models.TextField(validators=[MinLengthValidator(1),MaxLengthValidator(63)],
-                             unique=True, default=None, blank=False)
+    name = models.TextField(validators=[validators.CheckNamespacenameFormat],
+                             unique=True, blank=False)
     class Meta:
         default_permissions = ()
         permissions = ( ('access_namespace', 'Access namespace'),)
@@ -36,9 +37,8 @@ class Namespace(models.Model):
         return self.name
 
 class Zone(models.Model):
-    name = models.TextField(validators=[MinLengthValidator(1),MaxLengthValidator(63)],
-                            default=None, blank=False)
-    namespace = models.ForeignKey(Namespace, on_delete=models.PROTECT, default=None, blank=False)
+    name = models.TextField(validators=[validators.CheckZonenameFormat], blank=False)
+    namespace = models.ForeignKey(Namespace, on_delete=models.PROTECT, blank=False)
     def __str__(self):
         return self.name
     class Meta:
@@ -53,13 +53,10 @@ class Zone(models.Model):
 
 class Rr(models.Model):
     # Le nom est obligatoire : ne peut pas être vide
-    name = models.TextField(validators=[MinLengthValidator(1),MaxLengthValidator(63)],
-                            default=None, blank=False)
-    type = models.TextField(validators=[MinLengthValidator(1),MaxLengthValidator(10)],
-                            choices=RECORDTYPES,
-                            default=None, blank=False)
+    name = models.TextField(validators=[validators.CheckRrNameFormat], blank=False)
+    type = models.TextField(choices=RECORDTYPES, blank=False)
     ttl = models.PositiveIntegerField(default=3600, blank=False)
-    zone = models.ForeignKey(Zone, on_delete=models.PROTECT, default=None, blank=False)
+    zone = models.ForeignKey(Zone, on_delete=models.PROTECT, blank=False)
     # SOA
     soa_master = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
     soa_mail = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
