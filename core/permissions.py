@@ -1,6 +1,7 @@
-from rest_framework import permissions
+from rest_framework import permissions, status
 from core.models import Rr, Zone, Zonerule
 from core.serializers import RrSerializer
+from rest_framework.exceptions import ValidationError
 
 class HasAccess(permissions.BasePermission):
     """
@@ -21,9 +22,8 @@ class RrValidNameOrType(permissions.BasePermission):
             return True
 
         serializer = RrSerializer(data=request.data)
-        # Wrong data: permission denied
-        if not serializer.is_valid():
-            return False
+        #breakpoint()
+        serializer.is_valid(raise_exception=True)
 
         name = serializer.validated_data['name']
         type = serializer.validated_data['type']
