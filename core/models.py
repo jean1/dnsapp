@@ -1,8 +1,8 @@
 import re
 from django.db import models
 from django.db.models import CheckConstraint, Q, F
-from django.core.validators import MaxLengthValidator, MinLengthValidator
-from core import validators
+from django.core.validators import MaxLengthValidator
+from core.validators import NamespaceNameValidator, ZoneNameValidator, RrNameValidator, AbsOrRelNameValidator
 
 nameformat='^[-0-9a-z.]+$'
 rrnameformat='^([-0-9a-zA-Z._*]+|@)$'
@@ -22,7 +22,7 @@ RECORDTYPES = [
 
 class Namespace(models.Model):
     # Le nom est obligatoire : ne peut pas être vide, doit être unique
-    name = models.TextField(validators=[validators.CheckNamespacenameFormat],
+    name = models.TextField(validators=[NamespaceNameValidator],
                              unique=True, blank=False)
     class Meta:
         default_permissions = ()
@@ -37,7 +37,7 @@ class Namespace(models.Model):
         return self.name
 
 class Zone(models.Model):
-    name = models.TextField(validators=[validators.CheckZonenameFormat], blank=False)
+    name = models.TextField(validators=[ZoneNameValidator], blank=False)
     namespace = models.ForeignKey(Namespace, on_delete=models.PROTECT, blank=False)
     def __str__(self):
         return self.name
@@ -53,13 +53,13 @@ class Zone(models.Model):
 
 class Rr(models.Model):
     # Le nom est obligatoire : ne peut pas être vide
-    name = models.TextField(validators=[validators.CheckRrNameFormat], blank=False)
+    name = models.TextField(validators=[RrNameValidator()], blank=False)
     type = models.TextField(choices=RECORDTYPES, blank=False)
     ttl = models.PositiveIntegerField(default=3600, blank=False)
     zone = models.ForeignKey(Zone, on_delete=models.PROTECT, blank=False)
     # SOA
-    soa_master = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
-    soa_mail = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
+    soa_master = models.TextField(validators=[AbsOrRelNameValidator()], blank=True, null=True)
+    soa_mail = models.TextField(validators=[AbsOrRelNameValidator()], blank=True, null=True)
     soa_serial = models.PositiveIntegerField(blank=True, null=True)
     soa_refresh = models.PositiveIntegerField(blank=True, null=True)
     soa_retry = models.PositiveIntegerField(blank=True, null=True)
@@ -70,27 +70,27 @@ class Rr(models.Model):
     # AAAA
     aaaa = models.GenericIPAddressField(protocol="IPv6", blank=True, null=True)
     # CNAME
-    cname = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
+    cname = models.TextField(validators=[AbsOrRelNameValidator()], blank=True, null=True)
     # NS
-    ns = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
+    ns = models.TextField(validators=[AbsOrRelNameValidator()], blank=True, null=True)
     # MX
     prio = models.PositiveIntegerField(blank=True, null=True)
-    mx = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
+    mx = models.TextField(validators=[AbsOrRelNameValidator()], blank=True, null=True)
     # PTR
-    ptr = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
+    ptr = models.TextField(validators=[AbsOrRelNameValidator()], blank=True, null=True)
     # TXT; FIXME: valider la longueur maximale 
     txt = models.TextField(validators=[MaxLengthValidator(65535)], blank=True, null=True)
     # SRV
     srv_priority = models.PositiveIntegerField(blank=True, null=True)
     srv_weight = models.PositiveIntegerField(blank=True, null=True)
     srv_port = models.PositiveIntegerField(blank=True, null=True)
-    srv_target = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
+    srv_target = models.TextField(validators=[AbsOrRelNameValidator()], blank=True, null=True)
     # CAA ; FIXME: ajouter CHOICE pour caa_tag (issue, issuewild, iodef, contactemail)
     caa_flag = models.PositiveIntegerField(blank=True, null=True)
     caa_tag = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
     caa_value = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
     # DNAME
-    dname = models.TextField(validators=[MaxLengthValidator(253)], blank=True, null=True)
+    dname = models.TextField(validators=[ZoneNameValidator()], blank=True, null=True)
 
     def __str__(self):
         return self.name
