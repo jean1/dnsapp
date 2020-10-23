@@ -39,6 +39,17 @@ class RrViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
     def perform_create(self, serializer):
+        name = serializer.validated_data['name']
+        zone = serializer.validated_data['zone']
+
+        # Check if CNAME and name already exists in zone
+        if type == "CNAME":
+            if Rr.objects.filter(name=name, zone=zone).exists():
+                raise ValidationException(detail=f"Can't create CNAME '{name}' because name already exist")
+        # Check if name already exists in zone as CNAME
+        if Rr.objects.filter(name=name, zone=zone, type="CNAME").exists():
+            raise ValidationException(detail=f"Can't create '{name}' because CNAME with same name already exist")
+ 
         # FIXME: create permission object based on group of preferences
         # group = ?????
         # assign_perm(...) 
