@@ -24,7 +24,6 @@ SECRET_KEY = 'cprjr$3-ir-(y-j+dbrxzt-0+km10azyf#iu*fp-(bryv7jawb'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
 ALLOWED_HOSTS = []
 
 
@@ -39,8 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework.authtoken',
-    'guardian',
     'core',
+    'django_filters',
 ]
 
 MIDDLEWARE = [
@@ -78,17 +77,17 @@ WSGI_APPLICATION = 'dnsapp.wsgi.application'
 # https://docs.djangoproject.com/en/3.0/ref/settings/#databases
 
 DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-#        'NAME': 'django',
-#        'USER': 'django',
-#        'PASSWORD': 'toto27',
-#        'HOST': 'localhost',
-#    }
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'django',
+        'USER': 'django',
+        'PASSWORD': 'toto27',
+        'HOST': 'localhost',
     }
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+#    }
 }
 
 

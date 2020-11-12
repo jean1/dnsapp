@@ -1,5 +1,4 @@
 Django
 django-rest-framework
-django-guardian
 psycopg2
 django-filter

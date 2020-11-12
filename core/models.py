@@ -2,6 +2,7 @@ import re
 from django.db import models
 from django.db.models import CheckConstraint, Q, F
 from django.core.validators import MaxLengthValidator
+from django.contrib.auth.models import Group
 from core.validators import NamespaceNameValidator, ZoneNameValidator, ValidateRrName
 
 nameformat='^[-0-9a-z.]+$'
@@ -20,13 +21,27 @@ RECORDTYPES = [
     ("DNAME" ,"DNAME" ),
 ]
 
+PERMNAMESPACEACTION = [
+    ("AccessNamespace", "AccessNamespace"),
+    ("CreateZoneInNamespace", "CreateZoneInNamespace"),
+]
+PERMZONEACTION = [
+    ("AccessZone", "AccessZone"),
+    ("DeleteZone", "DeleteZone"),
+    ("UpdateZone", "UpdateZone"),
+    ("CreateRrInZone", "CreateRrInZone"),
+]
+PERMRRACTION = [
+    ("AccessRr", "AccessRr"),
+    ("UpdateDeleteRr", "DeleteRr"),
+]
+
 class Namespace(models.Model):
     # Le nom est obligatoire : ne peut pas être vide, doit être unique
     name = models.TextField(validators=[NamespaceNameValidator()],
                              unique=True, blank=False)
     class Meta:
         default_permissions = ()
-        permissions = ( ('access_namespace', 'Access namespace'),)
         constraints = [ 
                         CheckConstraint( check=Q(name__regex=nameformat),
                                          name='namespace_name_must_contain_only_letters_numbers_or_dots'
@@ -39,11 +54,18 @@ class Namespace(models.Model):
 class Zone(models.Model):
     name = models.TextField(validators=[ZoneNameValidator()], blank=False)
     namespace = models.ForeignKey(Namespace, on_delete=models.PROTECT, blank=False)
+    nsmaster = models.TextField(validators=[ValidateRrName], blank=False)
+    mail = models.TextField(validators=[ValidateRrName], blank=False)
+    serial = models.PositiveIntegerField(default=1, blank=False)
+    refresh = models.PositiveIntegerField(default=1200,blank=False)
+    retry = models.PositiveIntegerField(default=180,blank=False)
+    expire = models.PositiveIntegerField(default=1209600,blank=False)
+    minttl = models.PositiveIntegerField(default=3600,blank=False)
+
     def __str__(self):
         return self.name
     class Meta:
         default_permissions = ()
-        permissions = ( ('access_zone', 'Access zone'),)
         unique_together = ('name', 'namespace',)
         constraints = [ 
                         CheckConstraint( check=Q(name__regex=nameformat),
@@ -57,14 +79,7 @@ class Rr(models.Model):
     type = models.TextField(choices=RECORDTYPES, blank=False)
     ttl = models.PositiveIntegerField(default=3600, blank=False)
     zone = models.ForeignKey(Zone, on_delete=models.PROTECT, blank=False)
-    # SOA
-    soa_master = models.TextField(validators=[ValidateRrName], blank=True, null=True)
-    soa_mail = models.TextField(validators=[ValidateRrName], blank=True, null=True)
-    soa_serial = models.PositiveIntegerField(blank=True, null=True)
-    soa_refresh = models.PositiveIntegerField(blank=True, null=True)
-    soa_retry = models.PositiveIntegerField(blank=True, null=True)
-    soa_expire = models.PositiveIntegerField(blank=True, null=True)
-    soa_minttl = models.PositiveIntegerField(blank=True, null=True)
+
     # A
     a = models.GenericIPAddressField(protocol="IPv4", blank=True, null=True)
     # AAAA
@@ -97,7 +112,6 @@ class Rr(models.Model):
 
     class Meta:
         default_permissions = ()
-        permissions = ( ('access_rr', 'Access Rr'),)
         constraints = [ CheckConstraint( check=Q(name__regex=rrnameformat),
                                          name='record_name_must_contain_only_letters_numbers_star_or_dots'
                         ),
@@ -123,3 +137,48 @@ class Zonerule(models.Model):
         # check type
         m2 = (re.match(self.typepat, type) != None)
         return (m1 and m2)
+
+# Permission table for a Namespace
+# Semantic:
+# + AccessNamespace: group can access this namespace (ie. namespace is visible when listing all namespaces)
+# NB: namespaces can only by created and deleted by admin; non-admin user can not create/delete/modify namespace
+# + CreateZoneInNamespace: group can create new zone in this namespace
+#
+class PermNamespace(models.Model):
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, blank=False)
+    namespace = models.ForeignKey(Namespace, on_delete=models.CASCADE, blank=False)
+    action = models.TextField(choices=PERMNAMESPACEACTION, blank=False)
+    def __str__(self):
+        return f"namespace='{self.namespace}', group='{self.group}', action='{self.action}'"
+    class Meta:
+        unique_together = ('namespace', 'group', 'action',)
+
+# Permission table for a Zone
+# Semantic:
+# + ReadRrs: can list all Rr in this zone
+# + CreateRrs: can create new Rr in this zone
+# + UpdateParam: can modify SOA parameters for this zone (nsmaster, refresh ...)
+class PermZone(models.Model):
+    zone = models.ForeignKey(Zone, on_delete=models.CASCADE, blank=False)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, blank=False)
+    action = models.TextField(choices=PERMZONEACTION, blank=False)
+    def __str__(self):
+        return f"zone='{self.zone}', group='{self.group}', action='{self.action}'"
+    class Meta:
+        unique_together = ('zone', 'group', 'action',)
+
+# Permission table for individual Resource Record
+# Semantic:
+# + AccessRr: can get, can delete and
+#             can update this Rr value (can not modify its type nor its name) 
+#        example: change "www.example.com A 192.0.9.1" to "www.example.com A 192.0.9.222"
+# 
+class PermRr(models.Model):
+    rr = models.ForeignKey(Rr, on_delete=models.CASCADE, blank=False)
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, blank=False)
+    action = models.TextField(choices=PERMRRACTION, blank=False)
+    def __str__(self):
+        return f"rr='{self.rr}', group='{self.group}', action='{self.action}'"
+    class Meta:
+        unique_together = ('rr', 'group', 'action',)
+

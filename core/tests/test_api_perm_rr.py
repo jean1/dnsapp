@@ -10,7 +10,7 @@ import sys
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-class APIZoneruleTests(APITestCase):
+class APIPermRrTests(APITestCase):
     def setUp(self):
         # Create user 'admin' and put user in group 'admin'
         # admin = User.objects.create(username='admin')
@@ -75,3 +75,26 @@ class APIZoneruleTests(APITestCase):
         response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
+    def test_014_api_zonerule_create_with_invalid_data(self):
+        """ test rr create zone rule by posting to url "/rr/"; "@ A 192.0.9.1 in zone shared.example.com" ; should be allowed
+        """
+        self.client.login(username='titi', password='titi')
+        data = {'name': '@', 'type': '', 'zone': self.z1.id, 'a': '192.0.9.2',}
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_015_api_zonerule_create_with_empty_data(self):
+        """ test rr create zone rule by posting to url "/rr/"; "@ A 192.0.9.1 in zone shared.example.com" ; should be allowed
+        """
+        self.client.login(username='titi', password='titi')
+        data = {}
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_016_api_zonerule_create_with_invalid_data(self):
+        """ test rr create zone rule by posting to url "/rr/"; "@ A 192.0.9.1 in zone shared.example.com" ; should be allowed
+        """
+        self.client.login(username='titi', password='titi')
+        data = {'name': '-caribou', 'type': 'A', 'zone': self.z1.id, 'a': '192.0.9.3',}
+        response = self.client.post(self.url, data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
