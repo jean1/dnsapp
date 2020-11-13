@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from core.validators import ValidateAbsoluteName, TypeValidator
+from core.validators import ValidateAbsoluteName
 from core.models import Namespace, Zone, Rr
 
 class NamespaceSerializer(serializers.ModelSerializer):
@@ -30,7 +30,7 @@ class RrSerializer(serializers.ModelSerializer):
 
         # Check if absolute name ends with zone name
         if name.endswith("."):
-            if not name.endswith(f"{zone}.")
+            if not name.endswith(f"{zone}."):
                 raise ValidationException(detail=f"Absolute name '{name}' does not end with zone name")
 
         # Name and zone name should have been validated up to this point
