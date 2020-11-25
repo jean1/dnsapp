@@ -6,7 +6,6 @@ from django.contrib.auth.models import Group
 from core.validators import NamespaceNameValidator, ZoneNameValidator, ValidateRrName
 
 nameformat='^[-0-9a-z.]+$'
-rrnameformat='^([-0-9a-zA-Z._*]+|@)$'
 
 RECORDTYPES = [
     ("SOA" ,"SOA" ),
@@ -26,13 +25,13 @@ PERMNAMESPACEACTION = [
     ("CreateZoneInNamespace", "CreateZoneInNamespace"),
 ]
 PERMZONEACTION = [
-    ("AccessZone", "AccessZone"),
+    ("GetZone", "GetZone"),
     ("DeleteZone", "DeleteZone"),
     ("UpdateZone", "UpdateZone"),
     ("CreateRrInZone", "CreateRrInZone"),
 ]
 PERMRRACTION = [
-    ("AccessRr", "AccessRr"),
+    ("GetRr", "GetRr"),
     ("UpdateDeleteRr", "DeleteRr"),
 ]
 
@@ -42,11 +41,6 @@ class Namespace(models.Model):
                              unique=True, blank=False)
     class Meta:
         default_permissions = ()
-        constraints = [ 
-                        CheckConstraint( check=Q(name__regex=nameformat),
-                                         name='namespace_name_must_contain_only_letters_numbers_or_dots'
-                        ),
-                      ]
 
     def __str__(self):
         return self.name
@@ -54,7 +48,7 @@ class Namespace(models.Model):
 class Zone(models.Model):
     name = models.TextField(validators=[ZoneNameValidator()], blank=False)
     namespace = models.ForeignKey(Namespace, on_delete=models.PROTECT, blank=False)
-    nsmaster = models.TextField(validators=[ValidateRrName], blank=False)
+    nsmaster = models.TextField(validators=[ValidateRrName],  blank=False)
     mail = models.TextField(validators=[ValidateRrName], blank=False)
     serial = models.PositiveIntegerField(default=1, blank=False)
     refresh = models.PositiveIntegerField(default=1200,blank=False)
@@ -67,11 +61,6 @@ class Zone(models.Model):
     class Meta:
         default_permissions = ()
         unique_together = ('name', 'namespace',)
-        constraints = [ 
-                        CheckConstraint( check=Q(name__regex=nameformat),
-                                         name='zone_name_must_contain_only_letters_numbers_or_dots'
-                        ),
-                      ]
 
 class Rr(models.Model):
     name = models.TextField(validators=[ValidateRrName], blank=False)
@@ -112,10 +101,6 @@ class Rr(models.Model):
 
     class Meta:
         default_permissions = ()
-        constraints = [ CheckConstraint( check=Q(name__regex=rrnameformat),
-                                         name='record_name_must_contain_only_letters_numbers_star_or_dots'
-                        ),
-                      ]
 
 # Rule to add a record to a zone
 # namepat is the regexp checked for allowed Rr names 
@@ -169,8 +154,8 @@ class PermZone(models.Model):
 
 # Permission table for individual Resource Record
 # Semantic:
-# + AccessRr: can get, can delete and
-#             can update this Rr value (can not modify its type nor its name) 
+# + GetRr: can get this Rr
+# + DeleteUpdateRr: can delete and update this Rr value (can not modify its type nor its name) 
 #        example: change "www.example.com A 192.0.9.1" to "www.example.com A 192.0.9.222"
 # 
 class PermRr(models.Model):

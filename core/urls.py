@@ -5,10 +5,14 @@ from core import views
 # Create a router and register our viewsets with it.
 router = DefaultRouter()
 router.register(r'namespace', views.NamespaceViewSet)
-router.register(r'zone', views.ZoneViewSet)
-router.register(r'rr', views.RrViewSet)
 
 # The API URLs are now determined automatically by the router.
 urlpatterns = [
     path('', include(router.urls)),
+]
+urlpatterns += [
+    path('zone/', views.ZoneListOrCreate.as_view()),
+    path('zone/<int:pk>/', views.ZoneDetail.as_view()),
+    path('rr/', views.RrListOrCreate.as_view()),
+    path('rr/<int:pk>/', views.RrDetail.as_view()),
 ]
