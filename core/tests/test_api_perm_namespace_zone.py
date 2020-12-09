@@ -1,65 +1,68 @@
-from django.contrib.auth.models import User, Group
+from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APITestCase
-from core.models import Namespace, Zone, Rr, Zonerule, PermNamespace, PermZone
+from core.models import Namespace, Zone, Rr, Zonerule, PermNamespace, PermZone, User
 
 class APIPermNamespaceZoneTests(APITestCase):
     def setUp(self):
+        # Create group 'gr1' and default group
+        g = Group.objects.create(name='gr1') 
+        g.save()
+        defgrp = Group.objects.create(name='defgrp') 
+        defgrp.save()
+
         # Create user 'admin' and put user in group 'admin'
-        self.admin = User.objects.create(username='admin')
+        self.admin = User.objects.create(username='admin', default_pref=defgrp)
         self.admin.set_password('admin')
         self.admin.is_superuser = True
         self.admin.save()
         # Create user 'toto' and put user in group 'gr1'
-        u = User.objects.create(username='toto')
+        u = User.objects.create(username='toto', default_pref=g)
         u.set_password('toto')
         u.save()
-        g = Group.objects.create(name='gr1') 
-        g.save()
+        # Put user u in group g
         g.user_set.add(u) 
-
         # Allowed namespace
-        self.n1 = Namespace.objects.create(name='default')
-        self.n1.save()
+        self.nsdefault = Namespace.objects.create(name='default')
+        self.nsdefault.save()
         # Forbidden namespace (no permission)
-        self.n2 = Namespace.objects.create(name='other')
-        self.n2.save()
+        self.nsother = Namespace.objects.create(name='other')
+        self.nsother.save()
         # Allowed namespace
-        self.n3 = Namespace.objects.create(name='myns')
-        self.n3.save()
-        # Give access to 'default' namespace
-        self.p1 = PermNamespace(action = 'AccessNamespace', group = g, namespace = self.n1)
-        self.p1.save()
-        # Give access to 'myns' namespace
-        self.p3 = PermNamespace(action = 'AccessNamespace', group = g, namespace = self.n3)
+        self.nsmyns = Namespace.objects.create(name='myns')
+        self.nsmyns.save()
+
+        # Give access to 'myns' namespace to group g
+        self.p3 = PermNamespace(action = 'rw', group = g, obj = self.nsmyns) 
         self.p3.save()
-        # Give zone creation permission to 'default' namespace
-        self.p4 = PermNamespace(action = 'CreateZoneInNamespace', group = g, namespace = self.n1)
+        # + Give access to 'default' namespace to group g
+        # + Give zone creation permission to 'default' namespace to group g
+        self.p4 = PermNamespace(action = 'rc', group = g, obj = self.nsdefault)
         self.p4.save()
 
         # Allowed zone
-        self.z1 = Zone.objects.create(name='example.com',namespace=self.n1, nsmaster='ns1.example.com', mail='hostmaster.example.com')
+        self.z1 = Zone.objects.create(name='example.com',namespace=self.nsdefault, nsmaster='ns1.example.com', mail='hostmaster.example.com')
         self.z1.save()
         # Denied zone, zone created but no perm created
-        self.z2 = Zone.objects.create(name='denied.example.com',namespace=self.n1, nsmaster='ns1.example.com', mail='hostmaster.example.com')
+        self.z2 = Zone.objects.create(name='denied.example.com',namespace=self.nsdefault, nsmaster='ns1.example.com', mail='hostmaster.example.com')
         self.z2.save()
         # Allowed zone in forbidden namespace
-        self.z3 = Zone.objects.create(name='example.net',namespace=self.n2, nsmaster='ns1.example.com', mail='hostmaster.example.com')
+        self.z3 = Zone.objects.create(name='example.net',namespace=self.nsother, nsmaster='ns1.example.com', mail='hostmaster.example.com')
         self.z3.save()
         # updatable zone
-        self.z4 = Zone.objects.create(name='update.example.com',namespace=self.n1, nsmaster='ns1.example.com', mail='hostmaster.example.com')
+        self.z4 = Zone.objects.create(name='update.example.com',namespace=self.nsdefault, nsmaster='ns1.example.com', mail='hostmaster.example.com')
         self.z4.save()
-        # Give access to 'example.com' zone
-        self.zp1 = PermZone(action='GetZone', group = g, zone = self.z1)
+        # Give read access to 'example.com' zone to g
+        self.zp1 = PermZone(action='r', group = g, obj = self.z1)
         self.zp1.save()
-        # Give access to 'example.net' zone
+        # Give read-write access to 'example.net' zone to g
         # (in 'other' namespace whose access is forbidden)
-        self.zp3 = PermZone(action='GetZone', group = g, zone = self.z3)
-        self.zp3.save()
-        self.zp4 = PermZone(action='DeleteZone', group = g, zone = self.z3)
+        self.zp4 = PermZone(action='rw', group = g, obj = self.z3)
         self.zp4.save()
-        self.zp5 = PermZone(action='UpdateZone', group = g, zone = self.z4)
+        # Give read-write access to 'update.example.net' zone to g
+        self.zp5 = PermZone(action='rw', group = g, obj = self.z4)
         self.zp5.save()
+        # NB: Group g has no access to z2
 
     def test_000_api_namespace_get_all_allowed_namespace(self):
         """ test access permission to all allowed namespace "default" 
@@ -79,8 +82,8 @@ class APIPermNamespaceZoneTests(APITestCase):
              must be ok
         """
         # request
-        n1 = str(self.n1.id)
-        url = f'/namespace/{n1}/'
+        nsdefault = str(self.nsdefault.id)
+        url = f'/namespace/{nsdefault}/'
         # check
         self.client.login(username='toto', password='toto')
         response = self.client.get(url)
@@ -91,8 +94,8 @@ class APIPermNamespaceZoneTests(APITestCase):
              must be denied
         """
         # request
-        n2 = str(self.n2.id)
-        url = f'/namespace/{n2}/'
+        nsother = str(self.nsother.id)
+        url = f'/namespace/{nsother}/'
         # check
         self.client.login(username='toto', password='toto')
         response = self.client.get(url)
@@ -102,8 +105,8 @@ class APIPermNamespaceZoneTests(APITestCase):
         """ test delete to a namespace /namespace/2 for non-admin user
             must be denied
         """
-        n2 = str(self.n2.id)
-        url = f'/namespace/{n2}/'
+        nsother = str(self.nsother.id)
+        url = f'/namespace/{nsother}/'
         # check
         self.client.login(username='toto', password='toto')
         response = self.client.delete(url)
@@ -113,8 +116,8 @@ class APIPermNamespaceZoneTests(APITestCase):
         """ test delete to a namespace /namespace/3 for admin user
             must be allowed
         """
-        n3 = str(self.n3.id)
-        url = f'/namespace/{n3}/'
+        nsmyns = str(self.nsmyns.id)
+        url = f'/namespace/{nsmyns}/'
         self.client.login(username='admin', password='admin')
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
@@ -192,7 +195,7 @@ class APIPermNamespaceZoneTests(APITestCase):
 
     def test_013_api_zone_get_allowed_zones(self):
         """ test access to list of allowed zones
-            only 2 zones must be retrieved
+            only 3 zones must be retrieved
         """
         # request
         url = f'/zone/'
@@ -200,7 +203,7 @@ class APIPermNamespaceZoneTests(APITestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         number_of_zones = len(response.data)
-        self.assertEqual(number_of_zones, 2)
+        self.assertEqual(number_of_zones, 3)
 
     def test_014_api_zone_delete_allowed_zone(self):
         """ test delete allowed zone
@@ -228,12 +231,12 @@ class APIPermNamespaceZoneTests(APITestCase):
         """ test update allowed zone
             must be ok
         """
-        n2id = self.n2.id
+        nsother = self.nsother.id
         z4 = str(self.z4.id)
         # request
         url = f'/zone/{z4}/'
         self.client.login(username='toto', password='toto')
-        data = {'name': 'update1.example.com', 'namespace': n2id, 'nsmaster': 'ns2.example.com', 'mail': 'hostmaster6.example.com'}
+        data = {'name': 'update1.example.com', 'namespace': nsother, 'nsmaster': 'ns2.example.com', 'mail': 'hostmaster6.example.com'}
         response = self.client.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -242,11 +245,11 @@ class APIPermNamespaceZoneTests(APITestCase):
             must be denied
         """
         z1 = str(self.z1.id)
-        n1id = self.n1.id
+        nsdefault = self.nsdefault.id
         # request
         url = f'/zone/{z1}/'
         self.client.login(username='toto', password='toto')
-        data = {'name': 'foo.example.com', 'namespace': n1id, 'nsmaster': 'ns2.example.com', 'mail': 'hostmaster6.example.com'}
+        data = {'name': 'foo.example.com', 'namespace': nsdefault, 'nsmaster': 'ns2.example.com', 'mail': 'hostmaster6.example.com'}
         response = self.client.put(url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -255,10 +258,10 @@ class APIPermNamespaceZoneTests(APITestCase):
             (ie. no permission "CreateZoneInNamespace" for group g1 for namespace "other")
             must be denied
         """
-        n2id = self.n2.id
+        nsother = self.nsother.id
         url = f'/zone/'
         self.client.login(username='toto', password='toto')
-        data = {'name': 'myzone.example.com', 'namespace': n2id, 'nsmaster': 'ns1.example.com', 'mail': 'hostmaster.example.com'}
+        data = {'name': 'myzone.example.com', 'namespace': nsother, 'nsmaster': 'ns1.example.com', 'mail': 'hostmaster.example.com'}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN) 
 
@@ -266,9 +269,9 @@ class APIPermNamespaceZoneTests(APITestCase):
         """ test create of a zone in namespace with zone creation permission for namespace
             must be ok
         """
-        n1id = self.n1.id
+        nsdefault = self.nsdefault.id
         url = f'/zone/'
         self.client.login(username='toto', password='toto')
-        data = {'name': 'myzone.example.com', 'namespace': n1id, 'nsmaster': 'ns1.example.com', 'mail': 'hostmaster.example.com'}
+        data = {'name': 'myzone.example.com', 'namespace': nsdefault, 'nsmaster': 'ns1.example.com', 'mail': 'hostmaster.example.com'}
         response = self.client.post(url, data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
