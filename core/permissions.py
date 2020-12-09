@@ -1,225 +1,182 @@
 from rest_framework import status
 from rest_framework import permissions
-from core.models import Rr, Zone, Zonerule, Namespace, PermNamespace, PermZone, PermRr
+from core.models import Rr, Zone, Zonerule, Namespace, PermRr, PermNamespace, PermZone
 from core.serializers import RrSerializer, ZoneSerializer
 from rest_framework.exceptions import ValidationError
 
-# For each viewset, permission_classes are defined.
-# For each view,  permission classes wil be checked.
-# Permission classes have 2 methods, depending on request :
-# - has_object_permission for GET, DELETE, PUT
-# - has_permission for POST (create)
-#
-# NB: When listing a collection, by default, *no* permission class is
-# called, for performance reasons
-# Allowed objects list must be build by joining object and permission tables
+def check_permission(user, obj, permobj, action):
+    '''
+    Generic function to check ONE permission flag for an object and for a user
+    '''
+    if user.is_superuser:
+        return True
 
-# Example call flow :
-#
-# POST /zone/
-# view create
-#   for pc in permission_classes: [ZoneAccess, ZoneCreate]
-#       if ZoneAccess.has_permission: (method does not exist)
-#       if ZoneCreate.has_permission: ...
-#  
-# POST /rr/
-# view create
-#   for pc in permission_classes: [RrAccess, RrValidNameOrType]
-#       if RrAccess.has_permission: ...
-#       if RrValidNameOrType.has_permission: ...
-#
-# GET /rr/1
-# view retrieve
-#   for pc in permission_classes: [RrAccess]
-#       if RrAccess.has_object_permission: ...
-#
+## DEBUG
+#    print("obj")
+#    print(obj)
 
-# Permission for Namespace
-#
-# View / Permission that must be checked :
-# list               (GET /)      list all namespaces    -> check AccessNamespace for each namespace or admin
-# retrieve           (GET /1)     retrieve 1 namespace   -> check AccessNamespace for this namespace or admin
-# destroy            (DELETE /1)  destroy 1 namespace    -> admin OK ; denied if not admin
-# update             (PUT /1)     update  1 namespace    -> admin OK ; denied if not admin
-# create             (POST)       create  1 namespace    -> admin OK ; denied if not admin
-# partial_update     (PATCH /1)                             NOT IMPLEMENTED
-#
+    # Get all groups
+    groups = user.groups.all()
+## DEBUG
+#    print("groups")
+#    print(groups)
 
-class NamespaceAccess(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        # import ipdb; ipdb.set_trace()
-        if request.user.is_superuser:   
-            return True
-        groups = request.user.groups.all()
-        permission = PermNamespace.objects.filter(group__in = groups).filter(action='AccessNamespace')
-        return permission.filter(namespace = obj).exists()
+    # Join all permissions for given object and given flag
+    permissions = permobj.objects.filter(obj=obj).filter(action__icontains=action).all()
+## DEBUG
+#    print("permissions")
+#    print(permissions)
 
-    def has_permission(self, request, view):
-        if request.user.is_superuser:   
-            return True
-        if request.method in permissions.SAFE_METHODS and \
-            bool(request.user and request.user.is_authenticated):
-            return True
-        return False
+    # Join found permissions with found groups 
+    filteredpermissions = permissions.filter(group__in = groups)
+## DEBUG
+#    print("filteredpermissions")
+#    print(filteredpermissions)
 
-    def allowed_namespaces(user):
-        '''
-            This method is used for retrieving list of all allowed namespace for a given user
-            Normally called from view 'list' in NamespaceViewset
-        '''
-        if user.is_superuser:   
-            return Namespace.objects.all()
-        # Fetch all groups for user
-        groups = user.groups.all()
-        # Fetch set of permissions for all groups which match access permission
-        permission = PermNamespace.objects.filter(group__in = groups).filter(action='AccessNamespace').all()
-        # Return all namespaces matching permissions
-        return Namespace.objects.filter(permnamespace__in = permission)
+    result = filteredpermissions.exists()
 
-#
-# Permission for Zone
-#
-# View / Permission that must be checked :
-# list               (GET /)      list all zone     -> check GetZone for all zones or admin
-# retrieve           (GET /1)     retrieve 1 zone   -> check GetZone for this zone or admin
-# destroy            (DELETE /1)  destroy 1 zone    -> check DeleteZone for this zone or admin
-# update             (PUT /1)     update  1 zone    -> check UpdateZone for this zone or admin
-# create             (POST)       create  1 zone    -> check PermNamespace.CreateZoneInNamespace for namespace or admin 
-# partial_update     (PATCH /1)                     NOT IMPLEMENTED
-#
+## DEBUG
+#    print("result")
+#    print(result)
 
-class ZonePermCheck():
-    def check_permission(user, zone, action):
-        '''
-        Generic function to check permission flag for a zone
-        '''
-        if user.is_superuser:   
-            return True
-        groups = user.groups.all()
-        # PermZone describes permission on a zone as a triplet (zone, group, action) 
-        # Example: PermZone("example.com","group1","GetZone")
-        permissions = PermZone.objects.filter(zone=zone).filter(action=action).all()
-        return permissions.filter(group__in = groups).exists()
+    return result
 
-    def allowed_zones(user):
-        '''
-            Retrieves list of all allowed zone for a given user
-            Normally called from view 'list' in ZoneViewset
-        '''
+def get_perms(user, objtype, permobj, action):
+    '''
+        Retrieves list of all allowed objects for a given user, based on permission
+        Normally called from view 'list'
+    '''
+    # Fetch all groups for user
+    groups = user.groups.all()
+    # Fetch set of permissions for all groups which match access permission
+    return permobj.objects.filter(group__in = groups).filter(action__icontains=action).all()
+
+def set_perm(user, obj, permobj, action):
+    '''
+        Create a permission entry for given object, user, action
+        Normally called from view 'post'
+    '''
+    # 1) Pref(user, zone, group, action)
+    # on cree un RR -> cherche la preference pour (user,zone)
+    #               -> exemple : on a trouvé Pref(group="gr1",action="update")
+    #                                        Pref(group="gr1",action="delete")
+    #               -> on cree 2 objets PermRR(rr_créé, "gr1","update") , PermRR(rr_créé, "gr1","delete") 
+    # 2) if no pref defined, use default_pref from user model
+
+    # FIXME: test if Pref exist for user/zone
+    #
+    # if ... pref ... :
+    #   pref = ....
+    # else:
+    pref = user.default_pref
+
+    permobj.objects.create(obj = obj, group = pref, action = action)
+
+def get_allowed_namespaces(user, action):
+    '''
+        extract readable namespaces for user
+    '''
+    if user.is_superuser:
+        return Namespace.objects.all()
+    perms = get_perms(user, Namespace, PermNamespace, "r")
+    return Namespace.objects.filter(permnamespace__in = perms)
+
+def get_allowed_zones(user, action):
+    '''
+        extract readable zones for user
+    '''
+    if user.is_superuser:
+        return Zone.objects.all()
+    perms = get_perms(user, Zone, PermZone, "r") 
+    return Zone.objects.filter(permzone__in = perms)
+
+def get_allowed_rrs(user, action):
+    '''
+        extract readable rr for user
+    '''
+    if user.is_superuser:
+        return Rr.objects.all()
+    perms =  get_perms(user, Rr, PermRr, "r")
+    return Rr.objects.filter(permrr__in = perms)
+
+class PermCheck():
+    '''
+        generic methods to check permission
+    '''
+    def can_get(user, obj, permobj):
+        r = check_permission(user, obj, permobj, "r")
+## DEBUG
+#        print("result of can_get")
+#        print(r)
+
+        return r
+
+    def can_update(user, obj, permobj):
         if user.is_superuser:
-            return Zone.objects.all()
-        # Fetch all groups for user
+            return True
+        return check_permission(user, obj, permobj, "w")
+
+    def can_delete(user, obj, permobj):
+        if user.is_superuser:
+            return True
+        return check_permission(user, obj, permobj, "w")
+
+    def can_create_record(user, obj, permobj):
+        if user.is_superuser:
+            return True
         groups = user.groups.all()
-        # Fetch set of permissions for all groups which match access permission
-        permission = PermZone.objects.filter(group__in = groups).filter(action='GetZone').all()
-        # Return all zone matching permissions
-        return Zone.objects.filter(permzone__in = permission)
-
-    def can_get(user, zone):
-        return ZonePermCheck.check_permission(user, zone, 'GetZone')
-
-    def can_update(user, zone):
-        return ZonePermCheck.check_permission(user, zone, 'UpdateZone')
-
-    def can_delete(user, zone):
-        return ZonePermCheck.check_permission(user, zone, 'DeleteZone')
-
-    def can_create_in_namespace(user, namespace):
-        groups = user.groups.all()
-        action = 'CreateZoneInNamespace'
-        permissions = PermNamespace.objects.filter(namespace=namespace).filter(action=action).all()
+        permissions = permobj.objects.filter(obj=obj).filter(action__icontains="c").all()
         return permissions.filter(group__in = groups).exists()
 
-#
-# Permission for Rr
-#
-# View / Permission that must be checked :
-# list               (GET /)      list all rr     -> filter rr only with perm "GetRr" or all if admin
-# retrieve           (GET /1)     retrieve 1 rr   -> check GetRr for this Rr or admin
-# destroy            (DELETE /1)  destroy 1 rr    -> check UpdateDeleteRr for this Rr or admin
-# update             (PUT /1)     update  1 rr    -> check UpdateDeleteRr for this Rr or admin
-# create             (POST)       create  1 rr    -> check PermZone.CreateRrInZone for zone + check RrValidNameOrType rules for zone or admin
-# partial_update     (PATCH /1)                     NOT IMPLEMENTED
-#
+class NamespacePermCheck(PermCheck):
+
+    def can_delete(user):
+        return user.is_superuser
+
+    def can_update(user):
+        return user.is_superuser
+
+    def can_create(user):
+        return user.is_superuser
+
 class RrPermCheck():
-    def check_permission(user, rr, action):
-        '''
-        Generic function to check permission flag for a zone
-        '''
-        if user.is_superuser:   
-            return True
-        groups = user.groups.all()
-        # PermRr describes permission on a zone as a triplet (rr, group, action) 
-        # Example: PermRr("www","group1","GetRr")
-        permissions = PermRr.objects.filter(rr=rr).filter(action=action).all()
-        return permissions.filter(group__in = groups).exists()
-
-    def allowed_rr(user):
-        '''
-            Retrieves list of all allowed rr for a given user
-            Normally called from view 'list' in RrViewset
-        '''
-        if user.is_superuser:
-            return Rr.objects.all()
-        # Fetch all groups for user
-        groups = user.groups.all()
-        # Fetch set of permissions for all groups which match access permission
-        permission = PermRr.objects.filter(group__in = groups).filter(action='GetRr').all()
-        # Return all rr matching permissions
-        return Rr.objects.filter(permrr__in = permission)
-
-    def can_get(user, rr):
-        return RrPermCheck.check_permission(user, rr, 'GetRr')
-
-    def can_update(user, rr):
-        return RrPermCheck.check_permission(user, rr, 'UpdateDeleteRr')
-
-    def can_delete(user, rr):
-        return RrPermCheck.check_permission(user, rr, 'UpdateDeleteRr')
-
-    # When creating a new RR, check if RR with same name and same type
-    # already exist and if user has update permission on them
-    # Example: add new RR (abc,A,192.0.1.2) and an RR (abc,A,192.0.1.222) already exists
-    #          -> user must have permission on second RR
 
     def can_create_when_name_exist(user, name, type):
         """
         Check if all Rr with same name and same type
-        are allowed for update/delete to a given user
+        are allowed for write to a given user
         Example:
             user 'joe' is in group g1 and g2 and wants to create RR(abc,A,192.0.1.99)
             existing permissions:
-                RR (abc,A,192.0.1.222), action=UpdateDeleteRr, group g1
-                RR (abc,A,192.0.1.111), action=UpdateDeleteRr, group g2
-            -> access granted
+                RR3 (abc,A,192.0.1.222), action="w", group g1
+                RR4 (abc,A,192.0.1.111), action="w", group g2
+            -> access granted because all other RR with same name/type are writable
         """
         if user.is_superuser:   
             return True
 
+        # DEBUG
+        #print(f"DEBUG can_create_when_name_exist, name={name}")
+        #import ipdb; ipdb.set_trace()
+
         groups = user.groups.all()
         for rr in Rr.objects.filter(name=name, type=type):
-            if not PermRr.objects.filter(group__in = groups).filter(rr=rr,action='UpdateDeleteRr').exists():
+            if not PermRr.objects.filter(group__in = groups).filter(obj=rr,action__icontains="w").exists():
                 return False
         return True
 
-    def can_create_by_rule(user, name, type):
+    def can_create_by_rule(user, name, zone, type):
         if user.is_superuser:
             return True
-        serializer = RrSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
 
-        name = serializer.validated_data['name']
-        type = serializer.validated_data['type']
-        zone = serializer.validated_data['zone']
-        rule = Zonerule.objects.get(zone=zone)
+        for rule in Zonerule.objects.filter(zone=zone):
+            if not rule.is_checked(name, type):
+                return False
         # No rule defined for this zone: permission granted
-        if not rule:
-            return True
+        #
+        # FIXME:
+        # make at least one rule mandatory, following the least priviledge principle ?
+        # or document that this feature is only needed for shared zones ?
+        #
+        return True
 
-        return rule.is_checked(name, type)
-
-    def can_create_in_zone(user, zone):
-        groups = user.groups.all()
-        action = 'CreateRrInZone'
-        permissions = PermZone.objects.filter(zone=zone).filter(action=action).all()
-        return permissions.filter(group__in = groups).exists()
