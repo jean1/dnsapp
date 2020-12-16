@@ -18,7 +18,6 @@ class ZoneNameValidator(RegexValidator):
 attrchecks = {
     "A":     ["a"],
     "AAAA":  ["aaaa"],
-    "SOA":   ["soa_master", "soa_mail", "soa_serial", "soa_refresh", "soa_retry", "soa_expire", "soa_minttl"],
     "NS":    ["ns"],
     "CNAME": ["cname"],
     "MX":    ["prio", "mx"],
