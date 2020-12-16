@@ -62,7 +62,7 @@ class NamespaceDetail(APIView):
 
 class NamespaceListOrCreate(APIView):
     def get(self, request, format=None):
-        namespaces = NamespacePermCheck.get_allowed_namespaces(request.user, "r")
+        namespaces = get_allowed_namespaces(request.user, "r")
         serializer = NamespaceSerializer(namespaces, many=True)
         return Response(serializer.data)
 
@@ -139,7 +139,7 @@ class ZoneDetail(APIView):
 
 class ZoneListOrCreate(APIView):
     def get(self, request, format=None):
-        zones = ZonePermCheck.get_allowed_zones(request.user, "r")
+        zones = get_allowed_zones(request.user, "r")
         serializer = ZoneSerializer(zones, many=True)
         return Response(serializer.data)
 
