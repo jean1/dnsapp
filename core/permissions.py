@@ -78,7 +78,7 @@ def get_allowed_namespaces(user, action):
     '''
     if user.is_superuser:
         return Namespace.objects.all()
-    perms = get_perms(user, Namespace, PermNamespace, "r")
+    perms = get_perms(user, Namespace, PermNamespace, action)
     return Namespace.objects.filter(permnamespace__in = perms)
 
 def get_allowed_zones(user, action):
@@ -87,7 +87,7 @@ def get_allowed_zones(user, action):
     '''
     if user.is_superuser:
         return Zone.objects.all()
-    perms = get_perms(user, Zone, PermZone, "r") 
+    perms = get_perms(user, Zone, PermZone, action) 
     return Zone.objects.filter(permzone__in = perms)
 
 def get_allowed_rrs(user, action):
@@ -96,7 +96,7 @@ def get_allowed_rrs(user, action):
     '''
     if user.is_superuser:
         return Rr.objects.all()
-    perms =  get_perms(user, Rr, PermRr, "r")
+    perms =  get_perms(user, Rr, PermRr, action)
     return Rr.objects.filter(permrr__in = perms)
 
 class PermCheck():
