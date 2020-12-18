@@ -139,7 +139,7 @@ class ZoneDetail(APIView):
 
 class ZoneListOrCreate(APIView):
     def get(self, request, format=None):
-        zones = get_allowed_zones(request.user, "r")
+        zones = get_allowed_zones(request.user, "rg")
         serializer = ZoneSerializer(zones, many=True)
         return Response(serializer.data)
 

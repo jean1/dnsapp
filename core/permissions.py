@@ -49,7 +49,7 @@ def get_perms(user, objtype, permobj, action):
     # Fetch all groups for user
     groups = user.groups.all()
     # Fetch set of permissions for all groups which match access permission
-    return permobj.objects.filter(group__in = groups).filter(action__icontains=action).all()
+    return permobj.objects.filter(group__in = groups).filter(action__regex=f"[{action}]").all()
 
 def set_perm(user, obj, permobj, action):
     '''
