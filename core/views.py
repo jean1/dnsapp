@@ -10,6 +10,29 @@ from core.permissions import (PermCheck, NamespacePermCheck, RrPermCheck,
         get_allowed_rrs, set_perm, get_allowed_namespaces, get_allowed_zones)
 from rest_framework.response import Response
 
+# 
+# Utility functions
+# 
+
+def get_namespace_or_404(pk):
+    try:
+        return Namespace.objects.get(pk=pk)
+    except Namespace.DoesNotExist:
+        raise Http404
+
+def get_zone_or_404(pk):
+    try:
+        return Zone.objects.get(pk=pk)
+    except Zone.DoesNotExist:
+        raise Http404
+
+def get_rr_or_404(pk):
+    try:
+        return Rr.objects.get(pk=pk)
+    except Rr.DoesNotExist:
+        raise Http404
+
+
 #
 # Permission for Namespace
 #
@@ -23,14 +46,8 @@ from rest_framework.response import Response
 #
 
 class NamespaceDetail(APIView):
-    def get_namespace_or_404(self, pk):
-        try:
-            return Namespace.objects.get(pk=pk)
-        except Namespace.DoesNotExist:
-            raise Http404
-
     def get(self, request, pk, format=None):
-        namespace = self.get_namespace_or_404(pk)
+        namespace = get_namespace_or_404(pk)
         # Check permission
         if not PermCheck.can_get(request.user, namespace, PermNamespace):
            raise PermissionDenied('namespace get unauthorized')
@@ -38,7 +55,7 @@ class NamespaceDetail(APIView):
         return Response(serializer.data)
 
     def delete(self, request, pk, format=None):
-        namespace = self.get_namespace_or_404(pk)
+        namespace = get_namespace_or_404(pk)
 
         # Check permission
         if not NamespacePermCheck.can_delete(request.user):
@@ -48,7 +65,7 @@ class NamespaceDetail(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def put(self, request, pk, format=None):
-        namespace = self.get_namespace_or_404(pk)
+        namespace = get_namespace_or_404(pk)
         serializer = NamespaceSerializer(namespace, data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -94,15 +111,11 @@ class NamespaceListOrCreate(APIView):
 # partial_update     (PATCH /1)                     NOT IMPLEMENTED
 #
 
+
 class ZoneDetail(APIView):
-    def get_zone_or_404(self, pk):
-        try:
-            return Zone.objects.get(pk=pk)
-        except Zone.DoesNotExist:
-            raise Http404
 
     def get(self, request, pk, format=None):
-        zone = self.get_zone_or_404(pk)
+        zone = get_zone_or_404(pk)
 
         #import ipdb; ipdb.set_trace()
 
@@ -114,7 +127,7 @@ class ZoneDetail(APIView):
         return Response(serializer.data)
 
     def delete(self, request, pk, format=None):
-        zone = self.get_zone_or_404(pk)
+        zone = get_zone_or_404(pk)
 
         # Check permission
         if not PermCheck.can_delete(request.user, zone, PermZone):
@@ -124,7 +137,7 @@ class ZoneDetail(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def put(self, request, pk, format=None):
-        zone = self.get_zone_or_404(pk)
+        zone = get_zone_or_404(pk)
 
         serializer = ZoneSerializer(zone, data=request.data)
         if not serializer.is_valid():
@@ -169,14 +182,8 @@ class ZoneListOrCreate(APIView):
 # partial_update     (PATCH /1)                     NOT IMPLEMENTED
 
 class RrDetail(APIView):
-    def get_rr_or_404(self, pk):
-        try:
-            return Rr.objects.get(pk=pk)
-        except Rr.DoesNotExist:
-            raise Http404
-
     def get(self, request, pk, format=None):
-        rr = self.get_rr_or_404(pk)
+        rr = get_rr_or_404(pk)
 
         # Check permission
         # import ipdb; ipdb.set_trace()
@@ -187,7 +194,7 @@ class RrDetail(APIView):
         return Response(serializer.data)
 
     def delete(self, request, pk, format=None):
-        rr = self.get_rr_or_404(pk)
+        rr = get_rr_or_404(pk)
 
         # Check permission
         if not PermCheck.can_delete(request.user, rr, PermRr):
@@ -197,7 +204,7 @@ class RrDetail(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     def put(self, request, pk, format=None):
-        rr = self.get_rr_or_404(pk)
+        rr = get_rr_or_404(pk)
 
         serializer = RrSerializer(rr, data=request.data)
         if not serializer.is_valid():
@@ -209,6 +216,22 @@ class RrDetail(APIView):
 
         serializer.save()
         return Response(serializer.data)
+
+
+class ZoneRrList(APIView):
+    def get(self, request, pk, format=None):
+
+        zone = get_zone_or_404(pk)
+
+        if PermCheck.can_generate(request.user, zone, PermZone):
+            rrs = Rr.objects.all()
+        else:
+            rrs = get_allowed_rrs(request.user, "r")
+            rrs = rrs.filter(zone=zone)
+
+        serializer = RrSerializer(rrs, many=True)
+        return Response(serializer.data)
+
 
 class RrListOrCreate(APIView):
     def get(self, request, format=None):
