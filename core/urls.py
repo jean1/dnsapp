@@ -14,6 +14,7 @@ urlpatterns += [
     path('namespace/<int:pk>/', views.NamespaceDetail.as_view()),
     path('zone/', views.ZoneListOrCreate.as_view()),
     path('zone/<int:pk>/', views.ZoneDetail.as_view()),
+    path('zone/<int:pk>/rr/', views.ZoneRrList.as_view()),
     path('rr/', views.RrListOrCreate.as_view()),
     path('rr/<int:pk>/', views.RrDetail.as_view()),
 ]
