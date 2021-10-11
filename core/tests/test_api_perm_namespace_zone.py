@@ -1,7 +1,7 @@
 from django.contrib.auth.models import Group
 from rest_framework import status
 from rest_framework.test import APITestCase
-from core.models import Namespace, Zone, Rr, Zonerule, PermNamespace, PermZone, User
+from core.models import Namespace, Zone, Rr, Zonerule, PermNamespace, PermZone, PermRr, User
 
 class APIPermNamespaceZoneTests(APITestCase):
     def setUp(self):
@@ -517,10 +517,10 @@ class APIPermNamespaceZoneTests(APITestCase):
         user019.save()
         # Put user in group
         group019.user_set.add(user019) 
-        # Create namespace without any permission
+        # Create namespace 
         namespace019 = Namespace.objects.create(name='namespace019')
         namespace019.save()
-        # Create zone permission
+        # Create zone create permission in namespace
         namespace019perm = PermNamespace(action = 'rwc', group = group019, obj = namespace019) 
         namespace019perm.save()
         
@@ -536,3 +536,93 @@ class APIPermNamespaceZoneTests(APITestCase):
         zone019.delete()
         namespace019.delete()
 
+    def test_020_api_zone_generate_allow(self):
+        """ generate a zone 
+            zone generate permission is set
+            must be ok
+        """
+        # Create group, user
+        group020 = Group.objects.create(name='group020') 
+        group020.save()
+        user020 = User.objects.create(username='user020', default_pref=group020)
+        user020.set_password('user020')
+        user020.save()
+        # Put user in group
+        group020.user_set.add(user020) 
+        # Create namespace 
+        namespace020 = Namespace.objects.create(name='namespace020')
+        namespace020.save()
+        # Create zone
+        zone020 = Zone.objects.create(name='zone020.example.com', namespace=namespace020, nsmaster='ns1.example.com', mail='hostmaster.example.com')
+        zone020.save()
+        # Create generate permission
+        zone020perm = PermZone(action='g', group = group020, obj = zone020)
+        zone020perm.save()
+        # Create RR in zone
+        rr020_1 = Rr.objects.create(name='rr020-1',type='A',a='192.0.9.1',zone=zone020)
+        rr020_1.save()
+        rr020_2 = Rr.objects.create(name='rr020-2',type='A',a='192.0.9.2',zone=zone020)
+        rr020_2.save()
+        rr020_3 = Rr.objects.create(name='rr020-3',type='A',a='192.0.9.3',zone=zone020)
+        rr020_3.save()
+        
+        # Request
+        url = f'/zone/{zone020.id}/rr/'
+        self.client.login(username='user020', password='user020')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        number_of_rr = len(response.data)
+        self.assertEqual(number_of_rr, 3)
+
+        # Cleanup
+        rr020_1.delete()
+        rr020_2.delete()
+        rr020_3.delete()
+        zone020.delete()
+        namespace020.delete()
+
+
+    def test_021_api_zone_generate_allow(self):
+        """ generate a zone 
+            no zone generate permission is present
+            must be empty
+        """
+        # Create group, user
+        group021 = Group.objects.create(name='group021') 
+        group021.save()
+        user021 = User.objects.create(username='user021', default_pref=group021)
+        user021.set_password('user021')
+        user021.save()
+        # Put user in group
+        group021.user_set.add(user021) 
+        # Create namespace 
+        namespace021 = Namespace.objects.create(name='namespace021')
+        namespace021.save()
+        # Create zone without permission
+        zone021 = Zone.objects.create(name='zone021.example.com', namespace=namespace021, nsmaster='ns1.example.com', mail='hostmaster.example.com')
+        zone021.save()
+        # Create RR in zone withour permissions
+        rr021_1 = Rr.objects.create(name='rr021-1',type='A',a='192.0.9.1',zone=zone021)
+        rr021_1.save()
+        rr021_2 = Rr.objects.create(name='rr021-2',type='A',a='192.0.9.2',zone=zone021)
+        rr021_2.save()
+        # Create RR in zone with with read permission 
+        rr021_3 = Rr.objects.create(name='rr021-3',type='A',a='192.0.9.3',zone=zone021)
+        rr021_3.save()
+        rr021_3perm = PermRr(action = 'r', group = group021, obj = rr021_3) 
+        rr021_3perm.save()
+        
+        # Request
+        url = f'/zone/{zone021.id}/rr/'
+        self.client.login(username='user021', password='user021')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        number_of_rr = len(response.data)
+        self.assertEqual(number_of_rr, 1)
+
+        # Cleanup
+        rr021_1.delete()
+        rr021_2.delete()
+        rr021_3.delete()
+        zone021.delete()
+        namespace021.delete()

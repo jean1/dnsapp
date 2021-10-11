@@ -128,6 +128,14 @@ class PermCheck():
         permissions = permobj.objects.filter(obj=obj).filter(action__icontains="c").all()
         return permissions.filter(group__in = groups).exists()
 
+    def can_generate(user, obj, permobj):
+        if user.is_superuser:
+            return True
+        groups = user.groups.all()
+        permissions = permobj.objects.filter(obj=obj).filter(action__icontains="g").all()
+        return permissions.filter(group__in = groups).exists()
+
+
 class NamespacePermCheck(PermCheck):
 
     def can_delete(user):
